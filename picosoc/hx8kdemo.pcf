@@ -38,3 +38,4 @@ set_io leds[2] C4  # D4
 set_io leds[1] B3  # D3
 set_io leds[0] C3  # D2
 
+set_io cts_n A15

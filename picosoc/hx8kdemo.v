@@ -19,6 +19,7 @@
 
 module hx8kdemo (
 	input clk,
+        output cts_n,
 
 	output ser_tx,
 	input ser_rx,
@@ -42,6 +43,8 @@ module hx8kdemo (
 	output debug_flash_io2,
 	output debug_flash_io3
 );
+        assign cts_n = 1'b0;
+
 	reg [5:0] reset_cnt = 0;
 	wire resetn = &reset_cnt;
 
