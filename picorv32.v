@@ -82,7 +82,7 @@ module picorv32 #(
 	parameter [ 0:0] ENABLE_TRACE = 0,
 	parameter [ 0:0] REGS_INIT_ZERO = 0,
 	parameter [31:0] MASKED_IRQ = 32'h 0000_0000,
-	parameter [31:0] LATCHED_IRQ = 32'h ffff_ffff,
+	parameter [31:0] LATCHED_IRQ = 32'h ffff_fffe,
 	parameter [31:0] PROGADDR_RESET = 32'h 0000_0000,
 	parameter [31:0] PROGADDR_IRQ = 32'h 0000_0010,
 	parameter [31:0] STACKADDR = 32'h ffff_ffff
@@ -1471,7 +1471,7 @@ module picorv32 #(
 			pcpi_timeout <= 0;
 			irq_active <= 0;
 			irq_delay <= 0;
-			irq_mask <= ~0;
+			irq_mask <= ~1;
 			next_irq_pending = 0;
 			irq_state <= 0;
 			eoi <= 0;

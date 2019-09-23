@@ -217,6 +217,7 @@ void print_dec(uint32_t v)
 	else putchar('0');
 }
 
+volatile uint32_t cycle_limit;
 char getchar_prompt(char *prompt)
 {
 	int32_t c = -1;
@@ -232,7 +233,7 @@ char getchar_prompt(char *prompt)
 	while (c == -1) {
 		__asm__ volatile ("rdcycle %0" : "=r"(cycles_now));
 		cycles = cycles_now - cycles_begin;
-		if (cycles > 12000000) {
+		if (cycles > cycle_limit) {
 			if (prompt)
 				print(prompt);
 			cycles_begin = cycles_now;
@@ -665,6 +666,7 @@ void cmd_echo()
 
 void main()
 {
+        cycle_limit = 12000000;
 	reg_leds = 31;
 	reg_uart_clkdiv = 104;
 	print("Booting..\n");

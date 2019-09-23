@@ -24,6 +24,9 @@ module hx8kdemo (
 	output ser_tx,
 	input ser_rx,
 
+	output dtm_ser_tx,
+	input  dtm_ser_rx,
+
 	output [7:0] leds,
 
 	output flash_csb,
@@ -78,7 +81,7 @@ module hx8kdemo (
 	assign leds = gpio;
 
 	always @(posedge clk) begin
-		if (!resetn) begin
+		if (!resetn || ndmreset) begin
 			gpio <= 0;
 		end else begin
 			iomem_ready <= 0;
@@ -93,12 +96,18 @@ module hx8kdemo (
 		end
 	end
 
+        wire ndmreset;
 	picosoc soc (
 		.clk          (clk         ),
 		.resetn       (resetn      ),
+                .ndmreset     (ndmreset    ),
 
 		.ser_tx       (ser_tx      ),
 		.ser_rx       (ser_rx      ),
+
+	        .dtm_ser_tx   (dtm_ser_tx  ),
+	        .dtm_ser_rx   (dtm_ser_rx  ),
+
 
 		.flash_csb    (flash_csb   ),
 		.flash_clk    (flash_clk   ),

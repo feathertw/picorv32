@@ -7,10 +7,10 @@ hx8ksim: hx8kdemo_tb.vvp hx8kdemo_fw.hex
 hx8ksynsim: hx8kdemo_syn_tb.vvp hx8kdemo_fw.hex
 	vvp -N $< +firmware=hx8kdemo_fw.hex
 
-hx8kdemo.blif: hx8kdemo.v spimemio.v simpleuart.v picosoc.v ../picorv32.v
+hx8kdemo.blif: hx8kdemo.v spimemio.v simpleuart.v picosoc.v ../picorv32.v debug/rtl/dm.v debug/rtl/dtm.v debug/rtl/dm_rom.v
 	yosys -ql hx8kdemo.log -p 'synth_ice40 -top hx8kdemo -blif hx8kdemo.blif' $^
 
-hx8kdemo_tb.vvp: hx8kdemo_tb.v hx8kdemo.v spimemio.v simpleuart.v picosoc.v ../picorv32.v spiflash.v
+hx8kdemo_tb.vvp: hx8kdemo_tb.v hx8kdemo.v spimemio.v simpleuart.v picosoc.v ../picorv32.v spiflash.v debug/rtl/dm.v debug/rtl/dtm.v debug/rtl/dm_rom.v
 	iverilog -s testbench -o $@ $^ `yosys-config --datdir/ice40/cells_sim.v`
 
 hx8kdemo_syn_tb.vvp: hx8kdemo_tb.v hx8kdemo_syn.v spiflash.v
@@ -37,7 +37,7 @@ hx8kdemo_sections.lds: sections.lds
 	riscv32-unknown-elf-cpp -P -DHX8KDEMO -o $@ $^
 
 hx8kdemo_fw.elf: hx8kdemo_sections.lds start.s firmware.c
-	riscv32-unknown-elf-gcc -DHX8KDEMO -march=rv32imc -Wl,-Bstatic,-T,hx8kdemo_sections.lds,--strip-debug -ffreestanding -nostdlib -o hx8kdemo_fw.elf start.s firmware.c
+	riscv32-unknown-elf-gcc -DHX8KDEMO -march=rv32i -Wl,-Bstatic,-T,hx8kdemo_sections.lds -ffreestanding -nostdlib -o hx8kdemo_fw.elf start.s firmware.c -g
 
 hx8kdemo_fw.hex: hx8kdemo_fw.elf
 	riscv32-unknown-elf-objcopy -O verilog hx8kdemo_fw.elf hx8kdemo_fw.hex

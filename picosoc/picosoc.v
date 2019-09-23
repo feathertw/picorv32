@@ -36,6 +36,7 @@
 module picosoc (
 	input clk,
 	input resetn,
+        output ndmreset,
 
 	output        iomem_valid,
 	input         iomem_ready,
@@ -50,6 +51,9 @@ module picosoc (
 
 	output ser_tx,
 	input  ser_rx,
+
+	output dtm_ser_tx,
+	input  dtm_ser_rx,
 
 	output flash_csb,
 	output flash_clk,
@@ -70,15 +74,15 @@ module picosoc (
 	input  flash_io3_di
 );
 	parameter [0:0] BARREL_SHIFTER = 1;
-	parameter [0:0] ENABLE_MULDIV = 1;
-	parameter [0:0] ENABLE_COMPRESSED = 1;
+	parameter [0:0] ENABLE_MULDIV = 0;
+	parameter [0:0] ENABLE_COMPRESSED = 0;
 	parameter [0:0] ENABLE_COUNTERS = 1;
-	parameter [0:0] ENABLE_IRQ_QREGS = 0;
+	parameter [0:0] ENABLE_IRQ_QREGS = 1;
 
 	parameter integer MEM_WORDS = 256;
 	parameter [31:0] STACKADDR = (4*MEM_WORDS);       // end of memory
 	parameter [31:0] PROGADDR_RESET = 32'h 0010_0000; // 1 MB into flash
-	parameter [31:0] PROGADDR_IRQ = 32'h 0000_0000;
+	parameter [31:0] PROGADDR_IRQ = 32'h 02E0_0000;
 
 	reg [31:0] irq;
 	wire irq_stall = 0;
@@ -86,6 +90,7 @@ module picosoc (
 
 	always @* begin
 		irq = 0;
+                irq[0] = dm_interrupt;
 		irq[3] = irq_stall;
 		irq[4] = irq_uart;
 		irq[5] = irq_5;
@@ -122,10 +127,10 @@ module picosoc (
 	wire [31:0] simpleuart_reg_dat_do;
 	wire        simpleuart_reg_dat_wait;
 
-	assign mem_ready = (iomem_valid && iomem_ready) || spimem_ready || ram_ready || spimemio_cfgreg_sel ||
+	assign mem_ready = (iomem_valid && iomem_ready) || spimem_ready || dm_ready || ram_ready || spimemio_cfgreg_sel ||
 			simpleuart_reg_div_sel || (simpleuart_reg_dat_sel && !simpleuart_reg_dat_wait);
 
-	assign mem_rdata = (iomem_valid && iomem_ready) ? iomem_rdata : spimem_ready ? spimem_rdata : ram_ready ? ram_rdata :
+	assign mem_rdata = (iomem_valid && iomem_ready) ? iomem_rdata : spimem_ready ? spimem_rdata : dm_ready ? dm_rdata : ram_ready ? ram_rdata :
 			spimemio_cfgreg_sel ? spimemio_cfgreg_do : simpleuart_reg_div_sel ? simpleuart_reg_div_do :
 			simpleuart_reg_dat_sel ? simpleuart_reg_dat_do : 32'h 0000_0000;
 
@@ -142,7 +147,7 @@ module picosoc (
 		.ENABLE_IRQ_QREGS(ENABLE_IRQ_QREGS)
 	) cpu (
 		.clk         (clk        ),
-		.resetn      (resetn     ),
+		.resetn      (resetn & (~ndmreset)),
 		.mem_valid   (mem_valid  ),
 		.mem_instr   (mem_instr  ),
 		.mem_ready   (mem_ready  ),
@@ -155,7 +160,7 @@ module picosoc (
 
 	spimemio spimemio (
 		.clk    (clk),
-		.resetn (resetn),
+		.resetn (resetn & (~ndmreset)),
 		.valid  (mem_valid && mem_addr >= 4*MEM_WORDS && mem_addr < 32'h 0200_0000),
 		.ready  (spimem_ready),
 		.addr   (mem_addr[23:0]),
@@ -186,7 +191,7 @@ module picosoc (
 
 	simpleuart simpleuart (
 		.clk         (clk         ),
-		.resetn      (resetn      ),
+		.resetn      (resetn & (~ndmreset)),
 
 		.ser_tx      (ser_tx      ),
 		.ser_rx      (ser_rx      ),
@@ -214,6 +219,55 @@ module picosoc (
 		.wdata(mem_wdata),
 		.rdata(ram_rdata)
 	);
+
+	wire dm_ready;
+	wire [31:0] dm_rdata;
+
+        wire        dmi_valid;
+        wire        dmi_ready;
+        wire        dmi_write;
+        wire [ 6:0] dmi_addr;
+        wire [31:0] dmi_wdata;
+        wire [31:0] dmi_rdata;
+
+	dtm #(
+                .DEFAULT_DIV(12000000/115200)
+        ) dtm (
+		.ser_tx      (dtm_ser_tx),
+		.ser_rx      (dtm_ser_rx),
+                .dmi_valid   (dmi_valid),
+                .dmi_ready   (dmi_ready),
+                .dmi_write   (dmi_write),
+                .dmi_addr    (dmi_addr),
+                .dmi_wdata   (dmi_wdata),
+                .dmi_rdata   (dmi_rdata),
+		.resetn      (resetn),
+		.clk         (clk)
+	);
+
+        wire dm_interrupt;
+	dm #(
+		.NUM_HART(1)
+	) dm (
+                .interrupt  (dm_interrupt),
+                .ndmreset   (ndmreset),
+                .dmi_valid  (dmi_valid),
+                .dmi_ready  (dmi_ready),
+                .dmi_write  (dmi_write),
+                .dmi_addr   (dmi_addr),
+                .dmi_wdata  (dmi_wdata),
+                .dmi_rdata  (dmi_rdata),
+
+	        .bus_valid (mem_valid && mem_addr >= 32'h02E0_0000 && mem_addr < 32'h 02F0_0000),
+	        .bus_ready (dm_ready),
+	        .bus_write (|mem_wstrb),
+	        .bus_addr  (mem_addr[19:0]),
+	        .bus_wdata (mem_wdata),
+	        .bus_rdata (dm_rdata),
+
+	        .resetn(resetn),
+	        .clk(clk)
+	);
 endmodule
 
 // Implementation note:
@@ -228,13 +282,13 @@ module picosoc_regs (
 	output [31:0] rdata1,
 	output [31:0] rdata2
 );
-	reg [31:0] regs [0:31];
+	reg [31:0] regs [0:35];
 
 	always @(posedge clk)
-		if (wen) regs[waddr[4:0]] <= wdata;
+		if (wen) regs[waddr[5:0]] <= wdata;
 
-	assign rdata1 = regs[raddr1[4:0]];
-	assign rdata2 = regs[raddr2[4:0]];
+	assign rdata1 = regs[raddr1[5:0]];
+	assign rdata2 = regs[raddr2[5:0]];
 endmodule
 
 module picosoc_mem #(

@@ -17,7 +17,9 @@
  *
  */
 
-module simpleuart (
+module simpleuart #(
+	parameter [31:0] DEFAULT_DIV = 104 // = clock/baudrate
+) (
 	input clk,
 	input resetn,
 
@@ -32,6 +34,8 @@ module simpleuart (
 	input         reg_dat_re,
 	input  [31:0] reg_dat_di,
 	output [31:0] reg_dat_do,
+	output        reg_dat_valid,
+	output        reg_dat_busy,
 	output        reg_dat_wait
 );
 	reg [31:0] cfg_divider;
@@ -52,9 +56,12 @@ module simpleuart (
 	assign reg_dat_wait = reg_dat_we && (send_bitcnt || send_dummy);
 	assign reg_dat_do = recv_buf_valid ? recv_buf_data : ~0;
 
+	assign reg_dat_busy = send_bitcnt || send_dummy;
+        assign reg_dat_valid = recv_buf_valid;
+
 	always @(posedge clk) begin
 		if (!resetn) begin
-			cfg_divider <= 1;
+			cfg_divider <= DEFAULT_DIV;
 		end else begin
 			if (reg_div_we[0]) cfg_divider[ 7: 0] <= reg_div_di[ 7: 0];
 			if (reg_div_we[1]) cfg_divider[15: 8] <= reg_div_di[15: 8];
