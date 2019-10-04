@@ -91,6 +91,7 @@ module picosoc (
 	always @* begin
 		irq = 0;
                 irq[0] = dm_interrupt;
+                irq[2] = 1;
 		irq[3] = irq_stall;
 		irq[4] = irq_uart;
 		irq[5] = irq_5;

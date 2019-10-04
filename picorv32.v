@@ -643,6 +643,8 @@ module picorv32 #(
 
 	// Instruction Decoder
 
+	reg instr_illegal_delay;
+	reg instr_ecall_ebreak_delay;
 	reg instr_lui, instr_auipc, instr_jal, instr_jalr;
 	reg instr_beq, instr_bne, instr_blt, instr_bge, instr_bltu, instr_bgeu;
 	reg instr_lb, instr_lh, instr_lw, instr_lbu, instr_lhu, instr_sb, instr_sh, instr_sw;
@@ -1316,8 +1318,9 @@ module picorv32 #(
 					cpuregs_wrdata = latched_stalu ? alu_out_q : reg_out;
 					cpuregs_write = 1;
 				end
-				ENABLE_IRQ && irq_state[0]: begin
-					cpuregs_wrdata = reg_next_pc | latched_compr;
+				ENABLE_IRQ && irq_state[0] && !instr_illegal_delay: begin
+	                                if(instr_ecall_ebreak_delay) cpuregs_wrdata = (reg_next_pc-4) | latched_compr;
+					else                         cpuregs_wrdata = (reg_next_pc  ) | latched_compr;
 					cpuregs_write = 1;
 				end
 				ENABLE_IRQ && irq_state[1]: begin
@@ -1471,7 +1474,9 @@ module picorv32 #(
 			pcpi_timeout <= 0;
 			irq_active <= 0;
 			irq_delay <= 0;
-			irq_mask <= ~1;
+			irq_mask <= ~3;
+                        instr_illegal_delay <= 0;
+	                instr_ecall_ebreak_delay <= 0;
 			next_irq_pending = 0;
 			irq_state <= 0;
 			eoi <= 0;
@@ -1505,7 +1510,14 @@ module picorv32 #(
 						`debug($display("ST_RD:  %2d 0x%08x", latched_rd, latched_stalu ? alu_out_q : reg_out);)
 					end
 					ENABLE_IRQ && irq_state[0]: begin
-						current_pc = PROGADDR_IRQ;
+                                                if(instr_illegal_delay) begin
+                                                        current_pc = PROGADDR_IRQ+4;
+			                                instr_illegal_delay  <= 0;
+                                                end
+                                                else begin
+                                                        current_pc = PROGADDR_IRQ;
+                                                end
+	                                        instr_ecall_ebreak_delay <= 0;
 						irq_active <= 1;
 						mem_do_rinst <= 1;
 					end
@@ -1617,9 +1629,12 @@ module picorv32 #(
 							end
 						end else begin
 							`debug($display("EBREAK OR UNSUPPORTED INSN AT 0x%08x", reg_pc);)
-							if (ENABLE_IRQ && !irq_mask[irq_ebreak] && !irq_active) begin
+							if (ENABLE_IRQ && !irq_mask[irq_ebreak]) begin
+                                                                irq_active<= 0;
 								next_irq_pending[irq_ebreak] = 1;
 								cpu_state <= cpu_state_fetch;
+			                                        instr_illegal_delay  <= !instr_ecall_ebreak;
+	                                                        instr_ecall_ebreak_delay <= instr_ecall_ebreak;
 							end else
 								cpu_state <= cpu_state_trap;
 						end
