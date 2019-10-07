@@ -230,7 +230,7 @@ char getchar_prompt(char *prompt)
 	if (prompt)
 		print(prompt);
 
-	while (c == -1) {
+	while (1) {
 		__asm__ volatile ("rdcycle %0" : "=r"(cycles_now));
 		cycles = cycles_now - cycles_begin;
 		if (cycles > cycle_limit) {
